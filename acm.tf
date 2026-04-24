@@ -39,13 +39,9 @@ resource "aws_route53_record" "cert_validation" {
 # A record point to ALB
 resource "aws_route53_record" "main" {
   zone_id = aws_route53_zone.main.zone_id
-  name = var.domain_name
-  type = "A"
-
-  alias {
-    name = aws_lb.main.dns_name
-    zone_id                = aws_lb.main.zone_id
-    evaluate_target_health = true
-  }
+  name    = var.domain_name
+  type    = "A"
+  ttl     = 300
+  records = ["216.198.79.1"]
 }
 

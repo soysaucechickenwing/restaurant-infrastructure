@@ -88,6 +88,7 @@ resource "aws_cloudwatch_log_group" "backend" {
   retention_in_days = 30
 }
 
+
 #ECS Task Definition
 resource "aws_ecs_task_definition" "backend" {
     family = "${var.app_name}-backend"
@@ -96,6 +97,7 @@ resource "aws_ecs_task_definition" "backend" {
     cpu = 512
     memory = 1024
     execution_role_arn = aws_iam_role.ecs_task_execution.arn
+    task_role_arn      = aws_iam_role.ecs_task_role.arn 
 
     container_definitions = jsonencode([{
         name = "backend"
@@ -145,10 +147,16 @@ resource "aws_ecs_service" "backend" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  # network_configuration {
+  #   subnets          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  #   security_groups  = [aws_security_group.ecs.id]
+  #   assign_public_ip = false
+  # }
+
   network_configuration {
-    subnets          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+    subnets          = [aws_subnet.public_1.id, aws_subnet.public_2.id]
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -157,6 +165,44 @@ resource "aws_ecs_service" "backend" {
     container_port   = 8080
   }
 
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+  
   depends_on = [aws_lb_listener.https]
+}
+
+
+# Task Role（容器运行时调用AWS服务用）
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${var.app_name}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_ses" {
+  name = "${var.app_name}-ecs-ses-policy"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ]
+      Resource = "*"
+    }]
+  })
 }
 
